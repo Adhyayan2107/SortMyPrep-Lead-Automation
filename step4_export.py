@@ -6,6 +6,7 @@ Outputs an Excel file — one row per lead, styled header, auto-width columns.
 import logging
 
 import pandas as pd
+import requests
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
@@ -110,3 +111,23 @@ def run(config):
         ws.freeze_panes = "A2"
 
     logging.info(f"Step 4 complete. {len(df)} leads exported → {OUTPUT_PATH}")
+
+    # Push leads to backend if configured
+    backend_url = config.get("backend_url", "").strip()
+    if backend_url:
+        _push_to_backend(df, backend_url)
+
+
+def _push_to_backend(df: pd.DataFrame, backend_url: str):
+    leads = df.to_dict("records")
+    try:
+        resp = requests.post(
+            f"{backend_url.rstrip('/')}/api/leads/bulk",
+            json={"leads": leads},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        result = resp.json()
+        logging.info(f"Backend sync: {result.get('inserted', 0)} new, {result.get('skipped', 0)} already existed")
+    except Exception as e:
+        logging.warning(f"Backend sync failed (leads still saved locally): {e}")

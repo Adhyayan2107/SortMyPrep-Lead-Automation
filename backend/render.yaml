@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: sortmyprep-leads-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn app:app
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false        # set this manually in the Render dashboard
+      - key: DB_PATH
+        value: /data/leads.db
+    disk:
+      name: leads-db
+      mountPath: /data
+      sizeGB: 1
