@@ -126,11 +126,13 @@ function syncLeads() {
     return;
   }
 
+  const LEVEL_DISPLAY = { "level1": "Senior (L1)", "level2": "Mid (L2)" };
+
   const rows = data.map(lead => [
     lead.id,
     lead.contact_name          || "",
     lead.contact_title         || "",
-    lead.contact_level         || "",
+    LEVEL_DISPLAY[lead.contact_level] || lead.contact_level || "",
     lead.email                 || "",
     lead.linkedin              || "",
     lead.company               || "",
@@ -302,7 +304,9 @@ function handleSendEmail(sheet, row, leadId) {
     });
   } catch (_) {}
 
-  sheet.getRange(row, COL["Sent At"]).setValue(new Date().toLocaleString());
+  const now = new Date();
+  const ts  = Utilities.formatDate(now, Session.getScriptTimeZone(), "dd MMM yyyy, hh:mm a");
+  sheet.getRange(row, COL["Sent At"]).setValue(ts);
   cell.setValue("Yes");
   styleEmailSent(sheet, row);
 }
@@ -315,12 +319,35 @@ function styleHeader(sheet) {
        .setBackground("#1F4E79")
        .setFontColor("#FFFFFF")
        .setFontWeight("bold")
-       .setHorizontalAlignment("center");
+       .setFontSize(11)
+       .setFontFamily("Arial")
+       .setHorizontalAlignment("center")
+       .setVerticalAlignment("middle");
+  sheet.setRowHeight(1, 28);
   sheet.setFrozenRows(1);
-  sheet.setColumnWidth(COL["Email Script"], 400);
-  sheet.setColumnWidth(COL["Company"],      200);
-  sheet.setColumnWidth(COL["LinkedIn"],     200);
-  sheet.setColumnWidth(COL["Address"],      200);
+
+  // Explicit widths for every column
+  const widths = {
+    "Lead ID":         160,
+    "Contact Name":    160,
+    "Title":           160,
+    "Level":           110,
+    "Email":           200,
+    "LinkedIn":        220,
+    "Company":         180,
+    "Website":         150,
+    "Address":         240,
+    "Phone":           130,
+    "Avg Rating":       90,
+    "Review Count":    110,
+    "Generate Script": 130,
+    "Send Email":      110,
+    "Email Script":    420,
+    "Sent At":         160,
+  };
+  Object.entries(widths).forEach(([h, w]) => {
+    if (COL[h]) sheet.setColumnWidth(COL[h], w);
+  });
 
   const yesNo = SpreadsheetApp.newDataValidation()
     .requireValueInList(["No", "Yes"], true).build();
@@ -329,10 +356,25 @@ function styleHeader(sheet) {
 }
 
 function styleDataRows(sheet, count) {
-  for (let r = 2; r <= count + 1; r++) {
-    const level = sheet.getRange(r, COL["Level"]).getValue();
-    sheet.getRange(r, 1, 1, HEADERS.length)
-         .setBackground(level === "level1" ? "#D6E4F0" : "#FFFFFF");
+  if (count < 1) return;
+
+  // Fetch all level values in one API call
+  const levels = sheet.getRange(2, COL["Level"], count, 1).getValues();
+
+  // Apply borders + font to entire data block at once
+  sheet.getRange(2, 1, count, HEADERS.length)
+       .setFontFamily("Arial")
+       .setFontSize(10)
+       .setVerticalAlignment("middle")
+       .setBorder(true, true, true, true, true, true,
+                  "#DDDDDD", SpreadsheetApp.BorderStyle.SOLID);
+
+  // Set background row-by-row based on level
+  for (let i = 0; i < count; i++) {
+    const level = levels[i][0];
+    const bg    = level === "Senior (L1)" ? "#D6E4F0" : "#FFFFFF";
+    sheet.getRange(i + 2, 1, 1, HEADERS.length).setBackground(bg);
+    sheet.setRowHeight(i + 2, 22);
   }
 }
 
