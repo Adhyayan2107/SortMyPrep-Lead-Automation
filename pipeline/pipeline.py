@@ -48,9 +48,19 @@ def save_state(state):
 
 
 def reset_state():
-    if os.path.exists(STATE_PATH):
-        os.remove(STATE_PATH)
-    logging.info("Pipeline state cleared — will restart from Step 1.")
+    outputs = _ROOT / "Outputs"
+    for fname in [
+        "pipeline_state.json",
+        "queue.csv",
+        "scraped_raw.csv",
+        "filtered.csv",
+        "with_contacts.csv",
+    ]:
+        p = outputs / fname
+        if p.exists():
+            p.unlink()
+            logging.info(f"Deleted {fname}")
+    logging.info("Pipeline reset — will restart from Step 1.")
 
 
 def main():
