@@ -119,7 +119,9 @@ def run(config):
 
 
 def _push_to_backend(df: pd.DataFrame, backend_url: str):
-    leads = df.to_dict("records")
+    # Use pandas JSON serialiser — it converts NaN → null correctly
+    import json
+    leads = json.loads(df.to_json(orient="records"))
     try:
         resp = requests.post(
             f"{backend_url.rstrip('/')}/api/leads/bulk",
