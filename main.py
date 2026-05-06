@@ -8,6 +8,9 @@ import platform
 import time
 import os
 
+from normalize_names import normalize_csv
+from remove_duplicates import remove_duplicates
+
 @dataclass
 class Place:
     name: str = ""
@@ -253,6 +256,12 @@ def main():
     append = args.append
     places = scrape_places(search_for, total)
     save_places_to_csv(places, output_path, append=append)
+
+    logging.info("Running name normalization...")
+    normalize_csv(output_path, output_path)
+
+    logging.info("Removing duplicates...")
+    remove_duplicates(output_path, output_path)
 
 if __name__ == "__main__":
     main()
