@@ -108,6 +108,62 @@ def extract_place(page: Page) -> Place:
                 place.opens_at = opens_at2_raw.replace("\u202f","")
     return place
 
+def dismiss_consent(page: Page):
+    """Try to dismiss any Google consent/cookie dialogs that may appear."""
+    consent_selectors = [
+        'button:has-text("Accept all")',
+        'button:has-text("Reject all")',
+        'button:has-text("I agree")',
+        'button:has-text("Accept")',
+        'form[action*="consent"] button',
+        '[aria-label="Accept all"]',
+    ]
+    for selector in consent_selectors:
+        try:
+            btn = page.locator(selector).first
+            if btn.is_visible(timeout=2000):
+                btn.click()
+                logging.info(f"Dismissed consent dialog using: {selector}")
+                page.wait_for_timeout(2000)
+                return
+        except Exception:
+            continue
+
+def find_and_fill_search_box(page: Page, search_for: str):
+    """Find the Google Maps search box using multiple strategies and fill it."""
+    # Strategy 1: original ID selector
+    search_selectors = [
+        '#searchboxinput',
+        'input[aria-label="Search Google Maps"]',
+        'input[name="q"]',
+        'input[placeholder="Search Google Maps"]',
+        'input.searchboxinput',
+    ]
+    for selector in search_selectors:
+        try:
+            locator = page.locator(selector).first
+            if locator.is_visible(timeout=5000):
+                locator.click()
+                locator.fill(search_for)
+                logging.info(f"Filled search box using selector: {selector}")
+                return
+        except Exception:
+            continue
+
+    # Strategy 2: find any visible text input on the page
+    try:
+        inputs = page.locator('input[type="text"], input:not([type])').all()
+        for inp in inputs:
+            if inp.is_visible():
+                inp.click()
+                inp.fill(search_for)
+                logging.info("Filled search box using generic input fallback")
+                return
+    except Exception:
+        pass
+
+    raise Exception("Could not find the Google Maps search box with any known selector")
+
 def scrape_places(search_for: str, total: int) -> List[Place]:
     setup_logging()
     places: List[Place] = []
@@ -120,14 +176,22 @@ def scrape_places(search_for: str, total: int) -> List[Place]:
         page = browser.new_page()
         try:
             page.goto("https://www.google.com/maps/@32.9817464,70.1930781,3.67z?", timeout=60000)
-            page.wait_for_timeout(1000)
-            page.locator('//input[@id="searchboxinput"]').fill(search_for)
+            page.wait_for_timeout(3000)
+
+            # Handle potential consent/cookie dialogs
+            dismiss_consent(page)
+
+            # Use robust search box detection
+            find_and_fill_search_box(page, search_for)
             page.keyboard.press("Enter")
-            page.wait_for_selector('//a[contains(@href, "https://www.google.com/maps/place")]')
+            page.wait_for_timeout(3000)
+
+            page.wait_for_selector('//a[contains(@href, "https://www.google.com/maps/place")]', timeout=30000)
             page.hover('//a[contains(@href, "https://www.google.com/maps/place")]')
             previously_counted = 0
             while True:
                 page.mouse.wheel(0, 10000)
+                page.wait_for_timeout(2000)
                 page.wait_for_selector('//a[contains(@href, "https://www.google.com/maps/place")]')
                 found = page.locator('//a[contains(@href, "https://www.google.com/maps/place")]').count()
                 logging.info(f"Currently Found: {found}")
@@ -159,9 +223,15 @@ def scrape_places(search_for: str, total: int) -> List[Place]:
 def save_places_to_csv(places: List[Place], output_path: str = "result.csv", append: bool = False):
     df = pd.DataFrame([asdict(place) for place in places])
     if not df.empty:
-        for column in df.columns:
-            if df[column].nunique() == 1:
-                df.drop(column, axis=1, inplace=True)
+        # Only drop columns that are all identical AND contain a useless default value.
+        # Skip this entirely when there's only 1 row (every column would be "unique == 1").
+        if len(df) > 1:
+            default_values = {"", "No", "None Found"}
+            for column in list(df.columns):
+                if df[column].nunique() == 1:
+                    val = df[column].iloc[0]
+                    if pd.isna(val) or str(val).strip() in default_values:
+                        df.drop(column, axis=1, inplace=True)
         file_exists = os.path.isfile(output_path)
         mode = "a" if append else "w"
         header = not (append and file_exists)
