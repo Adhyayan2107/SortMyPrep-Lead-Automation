@@ -29,7 +29,7 @@ def create_app(config: Config | None = None) -> Flask:
 
     # ── Database ──────────────────────────────────────────────────────────────
     client     = MongoClient(config.MONGO_URI)
-    collection = client.get_default_database()[config.DB_COLLECTION]
+    collection = client[config.DB_NAME][config.DB_COLLECTION]
     collection.create_index(
         [("contact_name", ASCENDING), ("company", ASCENDING)],
         unique=True,
