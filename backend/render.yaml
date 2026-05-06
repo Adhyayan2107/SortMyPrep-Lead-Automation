@@ -7,10 +7,6 @@ services:
     startCommand: gunicorn app:app
     envVars:
       - key: GROQ_API_KEY
-        sync: false        # set this manually in the Render dashboard
-      - key: DB_PATH
-        value: /data/leads.db
-    disk:
-      name: leads-db
-      mountPath: /data
-      sizeGB: 1
+        sync: false       # set manually in Render dashboard
+      - key: MONGO_URI
+        sync: false       # set manually in Render dashboard

@@ -1,0 +1,21 @@
+name: Keep Backend Alive
+
+on:
+  schedule:
+    # Ping every 14 minutes — Render free tier sleeps after 15 min of inactivity
+    - cron: "0,14,28,42,56 * * * *"
+  workflow_dispatch: # allow manual trigger from GitHub Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health endpoint
+        run: |
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            https://sortmyprep-lead-automation.onrender.com/api/health)
+          echo "Response: $STATUS"
+          if [ "$STATUS" != "200" ]; then
+            echo "Backend returned $STATUS — may still be warming up"
+            exit 1
+          fi
