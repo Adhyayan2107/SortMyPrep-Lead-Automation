@@ -11,14 +11,16 @@ import logging
 import os
 import re
 import time
+from pathlib import Path
 
 import pandas as pd
 import requests
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-INPUT_PATH = "Outputs/filtered.csv"
-OUTPUT_PATH = "Outputs/with_contacts.csv"
+_OUTPUTS    = Path(__file__).parent.parent / "Outputs"
+INPUT_PATH  = _OUTPUTS / "filtered.csv"
+OUTPUT_PATH = _OUTPUTS / "with_contacts.csv"
 
 ROCKETREACH_SEARCH_URL = "https://api.rocketreach.co/api/v2/person/search"
 ROCKETREACH_LOOKUP_URL = "https://api.rocketreach.co/api/v2/person/lookup"

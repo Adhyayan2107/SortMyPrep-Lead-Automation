@@ -6,6 +6,7 @@ Resumes from where it left off — queue.csv tracks which combos are done.
 import logging
 import os
 from itertools import product
+from pathlib import Path
 
 import pandas as pd
 
@@ -15,8 +16,9 @@ from remove_duplicates import remove_duplicates
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-QUEUE_PATH = "Outputs/queue.csv"
-RAW_OUTPUT = "Outputs/scraped_raw.csv"
+_OUTPUTS   = Path(__file__).parent.parent / "Outputs"
+QUEUE_PATH = _OUTPUTS / "queue.csv"
+RAW_OUTPUT = _OUTPUTS / "scraped_raw.csv"
 
 
 def generate_queue(cities, searches):
@@ -31,7 +33,7 @@ def generate_queue(cities, searches):
 
 
 def run(config):
-    os.makedirs("Outputs", exist_ok=True)
+    os.makedirs(_OUTPUTS, exist_ok=True)
 
     if os.path.exists(QUEUE_PATH):
         df = pd.read_csv(QUEUE_PATH)

@@ -5,14 +5,16 @@ to the configured use case. Resumes by skipping already-processed names.
 
 import logging
 import os
+from pathlib import Path
 
 import pandas as pd
 from groq import Groq
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-INPUT_PATH = "Outputs/scraped_raw.csv"
-OUTPUT_PATH = "Outputs/filtered.csv"
+_OUTPUTS    = Path(__file__).parent.parent / "Outputs"
+INPUT_PATH  = _OUTPUTS / "scraped_raw.csv"
+OUTPUT_PATH = _OUTPUTS / "filtered.csv"
 
 SYSTEM_PROMPT = (
     "You are a data quality analyst. Determine if a business listing is relevant "

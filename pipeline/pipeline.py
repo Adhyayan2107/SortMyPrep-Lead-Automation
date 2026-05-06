@@ -13,11 +13,13 @@ import argparse
 import json
 import logging
 import os
+from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-CONFIG_PATH = "config.json"
-STATE_PATH  = "Outputs/pipeline_state.json"
+_ROOT       = Path(__file__).parent.parent
+CONFIG_PATH = _ROOT / "config.json"
+STATE_PATH  = _ROOT / "Outputs" / "pipeline_state.json"
 
 DEFAULT_STATE = {
     "step1_done": False,
@@ -40,7 +42,7 @@ def load_state():
 
 
 def save_state(state):
-    os.makedirs("Outputs", exist_ok=True)
+    os.makedirs(_ROOT / "Outputs", exist_ok=True)
     with open(STATE_PATH, "w") as f:
         json.dump(state, f, indent=2)
 
@@ -83,7 +85,7 @@ def main():
         state[key] = True
         save_state(state)
 
-    logging.info("\nPipeline complete!  Final output → Outputs/final.csv")
+    logging.info(f"\nPipeline complete!  Final output → {_ROOT / 'Outputs' / 'final_leads.xlsx'}")
 
 
 if __name__ == "__main__":

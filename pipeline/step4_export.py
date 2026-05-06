@@ -4,6 +4,7 @@ Outputs an Excel file — one row per lead, styled header, auto-width columns.
 """
 
 import logging
+from pathlib import Path
 
 import pandas as pd
 import requests
@@ -12,8 +13,9 @@ from openpyxl.utils import get_column_letter
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-INPUT_PATH  = "Outputs/with_contacts.csv"
-OUTPUT_PATH = "Outputs/final_leads.xlsx"
+_OUTPUTS    = Path(__file__).parent.parent / "Outputs"
+INPUT_PATH  = _OUTPUTS / "with_contacts.csv"
+OUTPUT_PATH = _OUTPUTS / "final_leads.xlsx"
 
 COLUMN_ORDER = [
     "contact_name", "contact_title", "contact_level",
