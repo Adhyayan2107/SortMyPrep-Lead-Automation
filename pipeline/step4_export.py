@@ -192,18 +192,24 @@ def run(config):
 
 def _push_to_backend(df: pd.DataFrame, backend_url: str):
     import json
-    leads = json.loads(df.to_json(orient="records"))
-    try:
-        resp = requests.post(
-            f"{backend_url.rstrip('/')}/api/leads/bulk",
-            json={"leads": leads},
-            timeout=30,
-        )
-        resp.raise_for_status()
-        result = resp.json()
-        logging.info(
-            f"Backend sync: {result.get('inserted', 0)} new, "
-            f"{result.get('skipped', 0)} already existed"
-        )
-    except Exception as e:
-        logging.warning(f"Backend sync failed (leads still saved locally): {e}")
+    import time
+    leads   = json.loads(df.to_json(orient="records"))
+    url     = f"{backend_url.rstrip('/')}/api/leads/bulk"
+    payload = {"leads": leads}
+
+    for attempt in (1, 2):
+        try:
+            resp = requests.post(url, json=payload, timeout=90)
+            resp.raise_for_status()
+            result = resp.json()
+            logging.info(
+                f"Backend sync: {result.get('inserted', 0)} new, "
+                f"{result.get('skipped', 0)} already existed"
+            )
+            return
+        except Exception as e:
+            if attempt == 1:
+                logging.warning(f"Backend sync attempt 1 failed ({e}), retrying in 15 s…")
+                time.sleep(15)
+            else:
+                logging.warning(f"Backend sync failed after 2 attempts (leads still saved locally): {e}")
