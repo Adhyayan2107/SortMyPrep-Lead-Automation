@@ -98,20 +98,26 @@ def employer_matches(profile_employer, target_company):
 
 
 def lookup_by_linkedin(headers, linkedin_url):
-    """Search by LinkedIn URL — fallback when employer search returned no email."""
+    """Look up full profile (including email) directly by LinkedIn URL.
+    Uses the lookup endpoint with linkedin_url param — skips the intermediate
+    search step that was causing 400 errors with the search endpoint."""
     try:
-        resp = requests.post(
-            ROCKETREACH_SEARCH_URL,
+        resp = requests.get(
+            ROCKETREACH_LOOKUP_URL,
             headers=headers,
-            json={"query": {"linkedin_url": [linkedin_url]}, "start": 1, "page_size": 1},
+            params={"linkedin_url": linkedin_url},
             timeout=30,
         )
-        resp.raise_for_status()
-        profiles = resp.json().get("profiles", [])
-        return profiles[0] if profiles else None
+        if resp.status_code == 200:
+            data   = resp.json()
+            emails = data.get("emails") or []
+            return emails[0].get("email", "") if emails else ""
+        logging.warning(
+            f"LinkedIn lookup {resp.status_code} for '{linkedin_url}': {resp.text[:200]}"
+        )
     except Exception as e:
-        logging.warning(f"LinkedIn search failed for '{linkedin_url}': {e}")
-        return None
+        logging.warning(f"LinkedIn lookup failed for '{linkedin_url}': {e}")
+    return ""
 
 
 def search_profiles(headers, employer_value, page_size=25):
@@ -160,16 +166,14 @@ def fetch_contacts(api_key, company_name, domain, max_per_level):
             email = lookup_email(headers, p["id"])
             time.sleep(0.5)
 
-        # Fallback: if still no email but we have a LinkedIn URL, search by it
+        # Fallback: look up directly by LinkedIn URL if primary lookup missed
         if not email:
             li_url = p.get("linkedin_url", "")
             if li_url:
-                fb = lookup_by_linkedin(headers, li_url)
-                if fb and fb.get("id") != p.get("id") and fb.get("status") == "complete":
-                    email = lookup_email(headers, fb["id"])
-                    time.sleep(0.5)
-                    if email:
-                        logging.info(f"  LinkedIn fallback got email for {p.get('name', '')}")
+                email = lookup_by_linkedin(headers, li_url)
+                if email:
+                    logging.info(f"  LinkedIn fallback got email for {p.get('name', '')}")
+                time.sleep(0.5)
 
         contact = {
             "contact_name":  p.get("name", ""),
