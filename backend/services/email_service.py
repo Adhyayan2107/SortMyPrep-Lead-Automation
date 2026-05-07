@@ -6,15 +6,9 @@ Subject: Partnership Opportunity | AI-powered exam prep workflow to improve stud
 
 Hi [Name],
 
-I hope this email finds you well.
-I'm Ananya, the co-founder of sortmyprep. sortmyprep is a Google and Open-AI backed adaptive
-AI-exam prep platform that provides students & teachers with unlimited, adaptive questions with
-step-by-step solutions for the IB & Cambridge curricula.
+I hope this email finds you well. I'm Ananya, the co-founder of sortmyprep. sortmyprep is a Google and OpenAI-backed adaptive AI exam prep platform that provides students & teachers with unlimited, adaptive questions with step-by-step solutions for the IB & Cambridge curricula.
 
-We currently work with 2,000+ students from across the world from schools like Tanglin Trust
-School, One World International School, and Raffles International School. We have currently
-partnered with tutoring academies in Singapore, UAE, India, and Belgium, and are looking to
-strengthen our partnerships in Singapore, Hong Kong, Vietnam, and Thailand.
+We currently work with 2,000+ students from across the world from schools like Tanglin Trust School, One World International School, and Raffles International School. We have partnered with tutoring academies in Singapore, UAE, India, and Belgium, and are looking to strengthen our partnerships in the Middle East.
 
 Here's what we provide to centres:
 1. Unlimited, personalised practice, generated on demand.
@@ -33,14 +27,11 @@ Subject: Following up | sortmyprep x [Company]
 
 Hi [Name],
 
-We are currently working with tutoring academies in India, Singapore, UAE & Belgium that cater
-to over 2,000 students from schools like Tanglin Trust School, Singapore; GEMS School, Dubai;
-International School of Brussels, Belgium.
+We are currently working with tutoring academies in India, Singapore, UAE & Belgium that cater to over 2,000 students from schools like Tanglin Trust School, Singapore; GEMS School, Dubai; International School of Brussels, Belgium.
 
 Demo link: https://drive.google.com/drive/folders/1MaRL1F6G4_ZnF9vaYlpn_VG1AYoTc3b_
 
-We're currently strengthening our partnerships in the UAE. I would love to speak with you.
-Does sometime next week work?
+We're currently strengthening our partnerships in the UAE. I would love to speak with you. Does sometime next week work?
 
 Ananya
 
@@ -49,8 +40,7 @@ Subject: What schools are saying about sortmyprep
 
 Hi [Name],
 
-In the last 10 days, we have onboarded 5 centres and 1,000 students across Malaysia, USA, UK,
-and Hong Kong.
+In the last 10 days, we have onboarded 5 centres and 1,000 students across Malaysia, USA, UK, and Hong Kong.
 
 Student: "I love how the platform tracks my performance." — Arjun, Tanglin Trust School
 Teacher: "Having access to questions saves me over 2 hours/day." — Shikha, Belgium Int'l School
@@ -64,10 +54,7 @@ Subject: Last note from sortmyprep
 
 Hi [Name],
 
-I know I've followed up a few times, so this is the last time I'll be reaching out.
-
-We're expanding across Singapore, Hong Kong, Vietnam, and Thailand, and would love to work
-together. If interested, reach me at ananya@sortmyprep.com
+I know I've followed up a few times, so this is the last time I'll be reaching out. We're expanding across Singapore, Hong Kong, Vietnam, and Thailand, and would love to work together. If interested, reach me at ananya@sortmyprep.com
 
 Wishing you and your team all the best!
 
@@ -77,9 +64,15 @@ Ananya
 _SYSTEM_PROMPT = (
     "You are writing outreach emails on behalf of Ananya, co-founder of sortmyprep — "
     "a Google and OpenAI-backed AI exam prep platform for IB & Cambridge students. "
-    "Personalise the given template for a specific lead. Rules: address by first name only, "
-    "keep the subject line exactly as given, adjust regional references to match the lead's "
-    "location, keep tone warm and professional, sign off as Ananya. "
+    "Personalise the given template for a specific lead. Rules:\n"
+    "- Address by first name only.\n"
+    "- Keep the subject line exactly as given.\n"
+    "- Adjust regional references to match the lead's location.\n"
+    "- Keep tone warm and professional, sign off as Ananya.\n"
+    "- CRITICAL formatting: Never break a sentence across multiple lines. "
+    "Each paragraph must be one single continuous line of text. "
+    "Separate paragraphs with exactly one blank line. "
+    "Numbered list items each go on their own line only.\n"
     "Return ONLY the email — subject line first, blank line, then body. No extra commentary."
 )
 

@@ -288,8 +288,9 @@ function handleSendEmail(sheet, row, leadId) {
 
   try {
     GmailApp.sendEmail(toEmail, subject, body, {
-      name:    SENDER_NAME,
-      replyTo: "ananya@sortmyprep.com",
+      name:     SENDER_NAME,
+      replyTo:  "ananya@sortmyprep.com",
+      htmlBody: plainToHtml(body),
     });
   } catch (e) {
     cell.setValue("No");
@@ -309,6 +310,73 @@ function handleSendEmail(sheet, row, leadId) {
   sheet.getRange(row, COL["Sent At"]).setValue(ts);
   cell.setValue("Yes");
   styleEmailSent(sheet, row);
+}
+
+
+// ── Plain-text → HTML email converter ────────────────────────────────────────
+// Called at send time so the sheet still stores readable plain text.
+
+function _esc(s) {
+  return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function _fmt(s) {
+  // Split on URLs first so we don't escape them, then escape the rest
+  const parts = s.split(/(https?:\/\/[^\s]+)/g);
+  let out = "";
+  parts.forEach(function(part, i) {
+    if (i % 2 === 1) {
+      // URL — render as styled link, strip trailing punctuation
+      const url = part.replace(/[.,;!?)]+$/, "");
+      out += '<a href="' + url + '" style="color:#1155CC;font-weight:600;text-decoration:none;">View Demo →</a>';
+    } else {
+      let t = _esc(part);
+      // Bold greeting name: "Hi Yassine," at start of text
+      t = t.replace(/^(Hi\s+)(\w+)([,!.]?\s)/, "$1<strong>$2</strong>$3");
+      // Bold key brand/stat phrases
+      t = t.replace(/\bsortmyprep\b/gi, "<strong>sortmyprep</strong>");
+      t = t.replace(/\b2,000\+/g, "<strong>2,000+</strong>");
+      t = t.replace(/\b1,000\b/g, "<strong>1,000</strong>");
+      out += t;
+    }
+  });
+  return out;
+}
+
+function plainToHtml(plain) {
+  const blocks = plain.trim().split(/\n\s*\n/);
+  let body = "";
+
+  blocks.forEach(function(block) {
+    const lines = block.split("\n").map(function(l){ return l.trim(); }).filter(Boolean);
+    if (!lines.length) return;
+
+    const isItem = function(l){ return /^\d+\.\s/.test(l); };
+    const items  = lines.filter(isItem);
+
+    if (items.length >= 2) {
+      // Numbered list block
+      const header = lines.filter(function(l){ return !isItem(l); }).join(" ");
+      if (header) {
+        body += '<p style="margin:12px 0 2px 0;"><strong>' + _esc(header) + "</strong></p>";
+      }
+      body += '<ol style="margin:4px 0 12px 0;padding-left:22px;">';
+      items.forEach(function(item) {
+        body += '<li style="margin:4px 0;">' + _fmt(item.replace(/^\d+\.\s*/, "")) + "</li>";
+      });
+      body += "</ol>";
+    } else {
+      // Regular paragraph — join lines to fix mid-sentence wrapping
+      body += '<p style="margin:10px 0;">' + _fmt(lines.join(" ")) + "</p>";
+    }
+  });
+
+  return (
+    '<div style="font-family:Arial,sans-serif;font-size:14px;color:#222222;' +
+    'line-height:1.75;max-width:580px;">' +
+    body +
+    "</div>"
+  );
 }
 
 
