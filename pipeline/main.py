@@ -167,7 +167,8 @@ def find_and_fill_search_box(page: Page, search_for: str):
 
     raise Exception("Could not find the Google Maps search box with any known selector")
 
-def scrape_places(search_for: str, total: int) -> List[Place]:
+def scrape_places(search_for: str, total: int,
+                  lat: float = None, lng: float = None, zoom: int = 13) -> List[Place]:
     setup_logging()
     places: List[Place] = []
     with sync_playwright() as p:
@@ -178,24 +179,41 @@ def scrape_places(search_for: str, total: int) -> List[Place]:
             browser = p.chromium.launch(headless=False)
         page = browser.new_page()
         try:
-            page.goto("https://www.google.com/maps/@32.9817464,70.1930781,3.67z?", timeout=60000)
-            page.wait_for_timeout(3000)
+            if lat is not None and lng is not None:
+                # Grid mode: navigate directly to pinned coordinate search
+                query_encoded = search_for.replace(" ", "+")
+                url = f"https://www.google.com/maps/search/{query_encoded}/@{lat},{lng},{zoom}z"
+                page.goto(url, timeout=60000)
+                page.wait_for_timeout(3000)
+                dismiss_consent(page)
+            else:
+                # Legacy city-name mode
+                page.goto("https://www.google.com/maps/@32.9817464,70.1930781,3.67z?", timeout=60000)
+                page.wait_for_timeout(3000)
+                dismiss_consent(page)
+                find_and_fill_search_box(page, search_for)
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(3000)
 
-            # Handle potential consent/cookie dialogs
-            dismiss_consent(page)
+            # Wait for first result — 15 s is enough; empty grid points bail quickly
+            try:
+                page.wait_for_selector(
+                    '//a[contains(@href, "https://www.google.com/maps/place")]',
+                    timeout=15000,
+                )
+            except Exception:
+                logging.info("No results at this location — skipping.")
+                return places
 
-            # Use robust search box detection
-            find_and_fill_search_box(page, search_for)
-            page.keyboard.press("Enter")
-            page.wait_for_timeout(3000)
-
-            page.wait_for_selector('//a[contains(@href, "https://www.google.com/maps/place")]', timeout=30000)
             page.hover('//a[contains(@href, "https://www.google.com/maps/place")]')
             previously_counted = 0
             while True:
                 page.mouse.wheel(0, 10000)
                 page.wait_for_timeout(2000)
-                page.wait_for_selector('//a[contains(@href, "https://www.google.com/maps/place")]')
+                page.wait_for_selector(
+                    '//a[contains(@href, "https://www.google.com/maps/place")]',
+                    timeout=10000,
+                )
                 found = page.locator('//a[contains(@href, "https://www.google.com/maps/place")]').count()
                 logging.info(f"Currently Found: {found}")
                 if found >= total:

@@ -1,0 +1,22 @@
+{
+  "grid": {
+    "bounds": {
+      "lat_min": 24.2,
+      "lat_max": 25.6,
+      "lng_min": 54.3,
+      "lng_max": 56.0
+    },
+    "step_km": 15,
+    "zoom": 13
+  },
+  "searches": [
+    "IB IGCSE coaching"
+  ],
+  "total_per_search": 10,
+  "groq_api_key": "YOUR_GROQ_API_KEY",
+  "groq_model": "llama-3.3-70b-versatile",
+  "use_case_description": "IB/IGCSE coaching centers, international schools, or academic counselling services helping students with IB, IGCSE, or SAT preparation",
+  "rocketreach_api_key": "YOUR_ROCKETREACH_API_KEY",
+  "rocketreach_max_contacts_per_level": 2,
+  "backend_url": "https://your-backend.onrender.com"
+}
