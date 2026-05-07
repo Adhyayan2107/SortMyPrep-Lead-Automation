@@ -97,6 +97,23 @@ def employer_matches(profile_employer, target_company):
     return len(overlap) / len(target_words) >= 0.40
 
 
+def lookup_by_linkedin(headers, linkedin_url):
+    """Search by LinkedIn URL — fallback when employer search returned no email."""
+    try:
+        resp = requests.post(
+            ROCKETREACH_SEARCH_URL,
+            headers=headers,
+            json={"query": {"linkedin_url": [linkedin_url]}, "start": 1, "page_size": 1},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        profiles = resp.json().get("profiles", [])
+        return profiles[0] if profiles else None
+    except Exception as e:
+        logging.warning(f"LinkedIn search failed for '{linkedin_url}': {e}")
+        return None
+
+
 def search_profiles(headers, employer_value, page_size=25):
     payload = {"query": {"employer": [employer_value]}, "start": 1, "page_size": page_size}
     try:
@@ -137,11 +154,22 @@ def fetch_contacts(api_key, company_name, domain, max_per_level):
         if level == "level2" and len(level2) >= max_per_level:
             continue
 
-        # Only now do we spend a lookup credit to get the email
+        # Primary email lookup
         email = ""
         if p.get("status") == "complete":
             email = lookup_email(headers, p["id"])
             time.sleep(0.5)
+
+        # Fallback: if still no email but we have a LinkedIn URL, search by it
+        if not email:
+            li_url = p.get("linkedin_url", "")
+            if li_url:
+                fb = lookup_by_linkedin(headers, li_url)
+                if fb and fb.get("id") != p.get("id") and fb.get("status") == "complete":
+                    email = lookup_email(headers, fb["id"])
+                    time.sleep(0.5)
+                    if email:
+                        logging.info(f"  LinkedIn fallback got email for {p.get('name', '')}")
 
         contact = {
             "contact_name":  p.get("name", ""),
