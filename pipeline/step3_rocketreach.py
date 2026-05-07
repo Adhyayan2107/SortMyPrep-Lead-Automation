@@ -94,7 +94,7 @@ def employer_matches(profile_employer, target_company):
     if not target_words:
         return True
     overlap = target_words & employer_words
-    return len(overlap) / len(target_words) >= 0.35
+    return len(overlap) / len(target_words) >= 0.40
 
 
 def search_profiles(headers, employer_value, page_size=25):
