@@ -14,8 +14,8 @@ const SENDER_NAME  = "Ananya | sortmyprep";
 // Sheet column headers — order must match syncLeads() row builder
 const HEADERS = [
   "Lead ID", "Contact Name", "Title", "Level", "Email", "LinkedIn",
-  "Company", "Website", "Address", "Phone", "Avg Rating", "Review Count",
-  "Generate Script", "Send Email", "Email Script", "Sent At",
+  "Company", "Website", "Address", "Country", "Phone", "Avg Rating", "Review Count",
+  "Generated At", "Generate Script", "Send Email", "Email Script", "Sent At",
 ];
 
 // 1-based column index lookup: COL["Email"] === 5
@@ -138,9 +138,11 @@ function syncLeads() {
     lead.company               || "",
     lead.company_website       || "",
     lead.company_address       || "",
+    lead.country               || "",
     lead.company_phone         || "",
     lead.company_reviews_avg   || "",
     lead.company_reviews_count || "",
+    lead.generated_at          || "",
     lead.generate_script       || "No",
     lead.send_email            || "No",
     lead.email_script          || "",
@@ -405,9 +407,11 @@ function styleHeader(sheet) {
     "Company":         180,
     "Website":         150,
     "Address":         240,
+    "Country":          80,
     "Phone":           130,
     "Avg Rating":       90,
     "Review Count":    110,
+    "Generated At":    160,
     "Generate Script": 130,
     "Send Email":      110,
     "Email Script":    420,

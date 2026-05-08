@@ -8,7 +8,8 @@ Grid mode  (config has "grid" key):
 Legacy mode (config has "cities" key):
   Generates city × search combos as before (kept for backward compatibility).
 
-Resumes from where it left off — queue.csv tracks which points are done.
+Each zone gets its own queue file (queue_dubai.csv, queue_sharjah.csv, etc.)
+so progress is tracked independently per zone.
 """
 
 import logging
@@ -26,18 +27,18 @@ from remove_duplicates import remove_duplicates
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 _OUTPUTS   = Path(__file__).parent.parent / "Outputs"
-QUEUE_PATH = _OUTPUTS / "queue.csv"
 RAW_OUTPUT = _OUTPUTS / "scraped_raw.csv"
 
 
-def generate_grid(bounds, step_km, searches):
-    """
-    Generate a uniform lat/lng grid over the bounding box.
-    Each point × each search term becomes one queue row.
-    """
-    lat_step = step_km / 111.0
+def _queue_path(zone_name=None):
+    name = f"queue_{zone_name}.csv" if zone_name else "queue.csv"
+    return _OUTPUTS / name
+
+
+def generate_grid(bounds, step_km, searches, queue_path, location=""):
+    lat_step   = step_km / 111.0
     center_lat = (bounds["lat_min"] + bounds["lat_max"]) / 2
-    lng_step = step_km / (111.0 * math.cos(math.radians(center_lat)))
+    lng_step   = step_km / (111.0 * math.cos(math.radians(center_lat)))
 
     rows = []
     lat = bounds["lat_min"]
@@ -45,59 +46,86 @@ def generate_grid(bounds, step_km, searches):
         lng = bounds["lng_min"]
         while lng <= bounds["lng_max"] + 1e-9:
             for s in searches:
+                # Append city name to query so Google returns results in the
+                # right city regardless of the user's IP location.
+                query = f"{s} in {location}" if location else s
                 rows.append({
                     "lat":       round(lat, 6),
                     "lng":       round(lng, 6),
                     "search":    s,
-                    "query":     s,
+                    "query":     query,
                     "processed": False,
                 })
             lng += lng_step
         lat += lat_step
 
     df = pd.DataFrame(rows)
-    df.to_csv(QUEUE_PATH, index=False)
+    df.to_csv(queue_path, index=False)
     logging.info(
         f"Grid: {len(df)} points "
         f"({round((bounds['lat_max']-bounds['lat_min'])/lat_step)+1} lat × "
         f"{round((bounds['lng_max']-bounds['lng_min'])/lng_step)+1} lng) "
-        f"× {len(searches)} search(es) → {QUEUE_PATH}"
+        f"× {len(searches)} search(es) → {queue_path}"
     )
     return df
 
 
-def generate_city_queue(cities, searches):
+def generate_city_queue(cities, searches, queue_path):
     combos = [
         {"city": c, "search": s, "query": f"{s} in {c}", "processed": False}
         for c, s in product(cities, searches)
     ]
     df = pd.DataFrame(combos)
-    df.to_csv(QUEUE_PATH, index=False)
-    logging.info(f"Generated {len(df)} city × search combinations → {QUEUE_PATH}")
+    df.to_csv(queue_path, index=False)
+    logging.info(f"Generated {len(df)} city × search combinations → {queue_path}")
     return df
 
 
-def run(config):
+def run(config, zone_name=None, max_grids=None):
     os.makedirs(_OUTPUTS, exist_ok=True)
 
-    zoom = config.get("grid", {}).get("zoom", 13)
+    queue_path = _queue_path(zone_name)
+    zoom       = config.get("grid", {}).get("zoom", 13)
 
-    if os.path.exists(QUEUE_PATH):
-        df   = pd.read_csv(QUEUE_PATH)
-        done = int(df["processed"].sum())
-        logging.info(f"Resuming from existing queue ({done}/{len(df)} already done)")
+    if queue_path.exists():
+        df         = pd.read_csv(queue_path)
+        is_grid    = "lat" in df.columns
+        done_grids = len(df[df["processed"] == True][["lat", "lng"]].drop_duplicates()) if is_grid else int(df["processed"].sum())
+        total_grids = len(df[["lat", "lng"]].drop_duplicates()) if is_grid else len(df)
+        logging.info(f"Resuming from existing queue ({done_grids}/{total_grids} grid points done)")
     elif "grid" in config:
-        g  = config["grid"]
-        df = generate_grid(g["bounds"], g["step_km"], config["searches"])
+        g        = config["grid"]
+        location = config.get("zone_location", "")
+        df       = generate_grid(g["bounds"], g["step_km"], config["searches"], queue_path, location)
+        is_grid  = True
     else:
-        df = generate_city_queue(config["cities"], config["searches"])
+        df      = generate_city_queue(config["cities"], config["searches"], queue_path)
+        is_grid = False
 
     total_per_search = config.get("total_per_search", 20)
-    is_grid = "lat" in df.columns
+
+    # Build set of already-scraped names so each grid fetches only new places
+    known_names: set = set()
+    if RAW_OUTPUT.exists():
+        try:
+            existing = pd.read_csv(RAW_OUTPUT)
+            if "name" in existing.columns:
+                known_names = set(existing["name"].dropna().str.lower().str.strip())
+            logging.info(f"Loaded {len(known_names)} known place names to skip duplicates")
+        except Exception:
+            pass
+
+    # How many new grid points have been scraped this session
+    new_grids_scraped = 0
 
     for idx, row in df.iterrows():
         if row["processed"]:
             continue
+
+        # Stop if we've hit the per-run grid limit
+        if max_grids is not None and is_grid and new_grids_scraped >= max_grids:
+            logging.info(f"Reached --max-grids limit ({max_grids}). Stopping scrape early.")
+            break
 
         query = row["query"]
 
@@ -110,20 +138,29 @@ def run(config):
 
         logging.info(f"[{idx + 1}/{len(df)}] Scraping: {label}")
         try:
-            places = scrape_places(query, total_per_search, lat=lat, lng=lng, zoom=zoom)
+            places = scrape_places(query, total_per_search, lat=lat, lng=lng, zoom=zoom, known_names=known_names)
             if places:
-                append = os.path.exists(RAW_OUTPUT)
+                append = RAW_OUTPUT.exists()
                 save_places_to_csv(places, str(RAW_OUTPUT), append=append)
+                # Grow known set so subsequent grids don't re-fetch these
+                known_names.update(p.name.lower().strip() for p in places if p.name)
             df.at[idx, "processed"] = True
-            df.to_csv(QUEUE_PATH, index=False)
+            df.to_csv(queue_path, index=False)
         except Exception as e:
             logging.error(f"Failed to scrape '{label}': {e}")
-            # Leave as unprocessed — will retry on resume
+        finally:
+            # Count every attempt (success or fail) toward the per-run limit
+            if is_grid:
+                new_grids_scraped += 1
 
-    if os.path.exists(RAW_OUTPUT):
+    if RAW_OUTPUT.exists():
         logging.info("Normalizing names...")
         normalize_csv(str(RAW_OUTPUT), str(RAW_OUTPUT))
         logging.info("Removing duplicates...")
         remove_duplicates(str(RAW_OUTPUT), str(RAW_OUTPUT))
 
-    logging.info(f"Step 1 complete → {RAW_OUTPUT}")
+    # Log final progress
+    df_final    = pd.read_csv(queue_path)
+    done_final  = len(df_final[df_final["processed"] == True][["lat", "lng"]].drop_duplicates()) if is_grid else int(df_final["processed"].sum())
+    total_final = len(df_final[["lat", "lng"]].drop_duplicates()) if is_grid else len(df_final)
+    logging.info(f"Step 1 complete — {done_final}/{total_final} grid points scraped → {RAW_OUTPUT}")

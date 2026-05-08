@@ -23,9 +23,9 @@ OUTPUT_PATH = _OUTPUTS / "final_leads.xlsx"
 COLUMN_ORDER = [
     "contact_name", "contact_title", "contact_level",
     "email", "linkedin",
-    "company", "company_website", "company_address",
+    "company", "company_website", "company_address", "country",
     "company_phone", "company_reviews_avg", "company_reviews_count",
-    "exported_at",
+    "generated_at",
 ]
 
 COLUMN_LABELS = {
@@ -37,10 +37,11 @@ COLUMN_LABELS = {
     "company":               "Company",
     "company_website":       "Website",
     "company_address":       "Address",
+    "country":               "Country",
     "company_phone":         "Phone",
     "company_reviews_avg":   "Avg Rating",
     "company_reviews_count": "Review Count",
-    "exported_at":           "Exported At",
+    "generated_at":          "Generated At",
 }
 
 LEVEL_SORT    = {"level1": 0, "level2": 1}
@@ -69,13 +70,19 @@ def run(config):
     df = df.sort_values(["company", "_sort"]).drop(columns=["_sort"])
     df = df.reset_index(drop=True)
 
-    # Preserve original df for backend push (original level values, no exported_at)
+    # Stamp every row with when it was generated and which country
+    generated_at_str = datetime.now().strftime("%d %b %Y, %I:%M %p")
+    country_str      = config.get("zone_country", "")
+
+    # Preserve original df for backend push (original level values + metadata)
     df_backend = df.copy()
+    df_backend["generated_at"] = generated_at_str
+    df_backend["country"]      = country_str
 
     # Apply display transformations for Excel only
     df["contact_level"] = df["contact_level"].map(LEVEL_DISPLAY).fillna(df["contact_level"])
-    exported_at_str = datetime.now().strftime("%d %b %Y, %I:%M %p")
-    df["exported_at"] = exported_at_str
+    df["generated_at"]  = generated_at_str
+    df["country"]       = country_str
 
     # Keep only known columns in order
     cols = [c for c in COLUMN_ORDER if c in df.columns]
@@ -103,7 +110,7 @@ def run(config):
         meta           = ws["A1"]
         meta.value     = (
             f"SortMyPrep Leads Export   |   {n_rows} leads   |   "
-            f"Generated: {exported_at_str}"
+            f"Generated: {generated_at_str}"
         )
         meta.font      = Font(bold=True, color="FFFFFF", size=12)
         meta.fill      = PatternFill("solid", fgColor=META_COLOR)

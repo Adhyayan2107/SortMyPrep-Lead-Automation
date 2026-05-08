@@ -1,5 +1,7 @@
 import logging
-from typing import List, Optional
+import re
+import urllib.parse
+from typing import List, Optional, Set
 from playwright.sync_api import sync_playwright, Page
 from dataclasses import dataclass, asdict
 import pandas as pd
@@ -167,8 +169,20 @@ def find_and_fill_search_box(page: Page, search_for: str):
 
     raise Exception("Could not find the Google Maps search box with any known selector")
 
+def _name_from_href(href: str) -> str:
+    """Extract normalised place name from a Google Maps place URL.
+    URL format: .../maps/place/Place+Name/@lat,lng,zoom/data=...
+    Returns lowercase stripped string, or '' if not parseable.
+    """
+    match = re.search(r'/maps/place/([^/@?]+)', href)
+    if match:
+        return urllib.parse.unquote_plus(match.group(1)).lower().strip()
+    return ""
+
+
 def scrape_places(search_for: str, total: int,
-                  lat: float = None, lng: float = None, zoom: int = 13) -> List[Place]:
+                  lat: float = None, lng: float = None, zoom: int = 13,
+                  known_names: Set[str] = None) -> List[Place]:
     setup_logging()
     places: List[Place] = []
     with sync_playwright() as p:
@@ -177,10 +191,24 @@ def scrape_places(search_for: str, total: int,
             browser = p.chromium.launch(executable_path=browser_path, headless=False)
         else:
             browser = p.chromium.launch(headless=False)
-        page = browser.new_page()
+
+        # Spoof browser geolocation to the target grid point so Google Maps
+        # doesn't bias results toward the user's real IP location.
+        if lat is not None and lng is not None:
+            context = browser.new_context(
+                geolocation={"latitude": lat, "longitude": lng},
+                permissions=["geolocation"],
+            )
+        else:
+            context = browser.new_context()
+
+        page = context.new_page()
         try:
             if lat is not None and lng is not None:
-                # Grid mode: navigate directly to pinned coordinate search
+                # Navigate directly to the search URL with coordinates embedded.
+                # This tells Google Maps WHERE to search, not just where to look —
+                # using the search box instead would let Google ignore the viewport
+                # and redirect to the user's IP location (e.g. India instead of Dubai).
                 query_encoded = search_for.replace(" ", "+")
                 url = f"https://www.google.com/maps/search/{query_encoded}/@{lat},{lng},{zoom}z"
                 page.goto(url, timeout=60000)
@@ -205,8 +233,11 @@ def scrape_places(search_for: str, total: int,
                 logging.info("No results at this location — skipping.")
                 return places
 
+            seen = known_names or set()
+
             page.hover('//a[contains(@href, "https://www.google.com/maps/place")]')
             previously_counted = 0
+            all_links = []
             while True:
                 page.mouse.wheel(0, 10000)
                 page.wait_for_timeout(2000)
@@ -214,17 +245,33 @@ def scrape_places(search_for: str, total: int,
                     '//a[contains(@href, "https://www.google.com/maps/place")]',
                     timeout=10000,
                 )
-                found = page.locator('//a[contains(@href, "https://www.google.com/maps/place")]').count()
+                all_links = page.locator('//a[contains(@href, "https://www.google.com/maps/place")]').all()
+                found = len(all_links)
                 logging.info(f"Currently Found: {found}")
-                if found >= total:
+
+                # Count how many are genuinely new (not already scraped)
+                new_count = sum(
+                    1 for lnk in all_links
+                    if _name_from_href(lnk.get_attribute("href") or "") not in seen
+                    or not _name_from_href(lnk.get_attribute("href") or "")
+                )
+                if new_count >= total:
                     break
                 if found == previously_counted:
                     logging.info("Arrived at all available")
                     break
                 previously_counted = found
-            listings = page.locator('//a[contains(@href, "https://www.google.com/maps/place")]').all()[:total]
-            listings = [listing.locator("xpath=..") for listing in listings]
-            logging.info(f"Total Found: {len(listings)}")
+
+            # Pick only new listings up to total
+            listings = []
+            for lnk in all_links:
+                if len(listings) >= total:
+                    break
+                name = _name_from_href(lnk.get_attribute("href") or "")
+                if not name or name not in seen:
+                    listings.append(lnk.locator("xpath=.."))
+
+            logging.info(f"Total New Found: {len(listings)} (skipped {found - len(listings)} already-scraped)")
             for idx, listing in enumerate(listings):
                 try:
                     listing.click()
@@ -238,6 +285,7 @@ def scrape_places(search_for: str, total: int,
                 except Exception as e:
                     logging.warning(f"Failed to extract listing {idx+1}: {e}")
         finally:
+            context.close()
             browser.close()
     return places
 

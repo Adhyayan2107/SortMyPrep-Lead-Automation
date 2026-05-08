@@ -28,8 +28,18 @@ ROCKETREACH_LOOKUP_URL = "https://api.rocketreach.co/api/v2/person/lookup"
 LEVEL1_KEYWORDS = {"ceo", "coo", "cto", "cfo", "cmo", "cso", "chief", "founder",
                    "co-founder", "cofounder", "director", "principal", "president", "owner"}
 LEVEL2_KEYWORDS = {"head", "vp", "vice president", "manager", "dean"}
-SKIP_KEYWORDS   = {"associate", "intern", "coordinator", "assistant", "analyst",
-                   "junior", "trainee", "support", "executive assistant"}
+SKIP_KEYWORDS   = {
+    # Non-decision-maker roles — teaching staff
+    "instructor", "teacher", "tutor", "lecturer", "faculty", "professor",
+    "teaching assistant", "subject lead",
+    # Functional / back-office managers who can't decide on partnerships
+    "hr manager", "hr director", "finance manager", "finance director",
+    "finance and hr", "accountant", "accounts manager", "accounts",
+    "payroll", "it manager", "it support",
+    # Junior / support roles
+    "associate", "intern", "coordinator", "assistant", "analyst",
+    "junior", "trainee", "support", "executive assistant",
+}
 
 CONTACT_COLUMNS = [
     "contact_name", "contact_title", "contact_level", "email", "linkedin",

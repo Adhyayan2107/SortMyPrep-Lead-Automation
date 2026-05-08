@@ -18,7 +18,12 @@ OUTPUT_PATH = _OUTPUTS / "filtered.csv"
 
 SYSTEM_PROMPT = (
     "You are a data quality analyst. Determine if a business listing is relevant "
-    "to the given use case. Reply with ONLY 'YES' or 'NO'."
+    "to the given use case. Reply with ONLY 'YES' or 'NO'.\n"
+    "Prefer established organizations (coaching centers, schools, academies, institutes) "
+    "that have decision-makers such as owners, directors, or principals who can be "
+    "approached for partnerships. "
+    "Reject individual freelance tutors, solo home tutors, or listings that appear to be "
+    "a single teacher rather than an institution."
 )
 
 

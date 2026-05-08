@@ -1,14 +1,14 @@
 {
-  "grid": {
-    "bounds": {
-      "lat_min": 24.2,
-      "lat_max": 25.6,
-      "lng_min": 54.3,
-      "lng_max": 56.0
-    },
-    "step_km": 15,
-    "zoom": 13
+  "zones": {
+    "dubai":     {"lat_min": 24.85, "lat_max": 25.40, "lng_min": 54.95, "lng_max": 55.65, "step_km": 25, "location": "Dubai",          "country": "UAE"},
+    "sharjah":   {"lat_min": 25.20, "lat_max": 25.60, "lng_min": 55.30, "lng_max": 55.90, "step_km": 15, "location": "Sharjah",         "country": "UAE"},
+    "abu_dhabi": {"lat_min": 24.10, "lat_max": 24.55, "lng_min": 54.20, "lng_max": 54.75, "step_km": 15, "location": "Abu Dhabi",       "country": "UAE"},
+    "ajman":     {"lat_min": 25.35, "lat_max": 25.53, "lng_min": 55.43, "lng_max": 55.57, "step_km":  7, "location": "Ajman",           "country": "UAE"},
+    "rak":       {"lat_min": 25.55, "lat_max": 25.90, "lng_min": 55.70, "lng_max": 56.10, "step_km": 15, "location": "Ras Al Khaimah",  "country": "UAE"},
+    "fujairah":  {"lat_min": 25.00, "lat_max": 25.40, "lng_min": 56.15, "lng_max": 56.45, "step_km": 15, "location": "Fujairah",        "country": "UAE"},
+    "uaq":       {"lat_min": 25.50, "lat_max": 25.65, "lng_min": 55.50, "lng_max": 55.65, "step_km":  8, "location": "Umm Al Quwain",   "country": "UAE"}
   },
+  "zoom": 13,
   "searches": [
     "IB IGCSE coaching"
   ],
