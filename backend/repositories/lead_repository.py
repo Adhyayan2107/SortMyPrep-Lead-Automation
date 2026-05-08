@@ -3,7 +3,7 @@ from typing import Optional
 from bson import ObjectId
 from bson.errors import InvalidId
 from pymongo.collection import Collection
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import BulkWriteError, DuplicateKeyError
 
 
 class LeadRepository:
@@ -24,6 +24,17 @@ class LeadRepository:
             return True
         except DuplicateKeyError:
             return False
+
+    def insert_many(self, documents: list) -> tuple:
+        """Bulk insert in one round-trip. Returns (inserted, skipped) counts."""
+        if not documents:
+            return 0, 0
+        try:
+            result = self._col.insert_many(documents, ordered=False)
+            return len(result.inserted_ids), 0
+        except BulkWriteError as e:
+            inserted = e.details.get("nInserted", 0)
+            return inserted, len(documents) - inserted
 
     def update(self, lead_id: str, fields: dict) -> bool:
         """Partial update by ID. Returns False if ID is invalid or not found."""

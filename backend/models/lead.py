@@ -14,9 +14,11 @@ class Lead:
     company:               str  = ""
     company_website:       str  = ""
     company_address:       str  = ""
+    country:               str  = ""
     company_phone:         str  = ""
     company_reviews_avg:   str  = ""
     company_reviews_count: str  = ""
+    generated_at:          str  = ""
     generate_script:       str  = "No"
     send_email:            str  = "No"
     email_script:          Optional[str] = None
@@ -45,9 +47,11 @@ class Lead:
             "company":               self.company,
             "company_website":       self.company_website,
             "company_address":       self.company_address,
+            "country":               self.country,
             "company_phone":         self.company_phone,
             "company_reviews_avg":   self.company_reviews_avg,
             "company_reviews_count": self.company_reviews_count,
+            "generated_at":          self.generated_at,
             "generate_script":       self.generate_script,
             "send_email":            self.send_email,
             "email_script":          self.email_script,

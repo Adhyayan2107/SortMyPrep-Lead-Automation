@@ -20,13 +20,11 @@ class LeadService:
     # ── Bulk insert (from pipeline) ───────────────────────────────────────────
 
     def bulk_insert(self, raw_leads: list[dict]) -> dict:
-        inserted = 0
+        docs = []
         for raw in raw_leads:
-            raw.pop("id", None)  # strip any leftover serialised id
-            lead = Lead.from_dict(raw)
-            if self._repo.insert(lead.to_dict()):
-                inserted += 1
-        skipped = len(raw_leads) - inserted
+            raw.pop("id", None)
+            docs.append(Lead.from_dict(raw).to_dict())
+        inserted, skipped = self._repo.insert_many(docs)
         return {"inserted": inserted, "skipped": skipped}
 
     # ── Read ──────────────────────────────────────────────────────────────────
