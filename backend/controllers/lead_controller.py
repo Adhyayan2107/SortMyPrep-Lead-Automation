@@ -16,6 +16,10 @@ def create_lead_blueprint(lead_service: LeadService) -> Blueprint:
     def get_all():
         return jsonify(lead_service.get_all())
 
+    @bp.route("/clear-all", methods=["POST"])
+    def clear_all():
+        return jsonify(lead_service.clear_all())
+
     @bp.route("/bulk", methods=["POST"])
     def bulk_insert():
         leads = (request.json or {}).get("leads", [])

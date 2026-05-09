@@ -57,6 +57,11 @@ class LeadRepository:
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
+    def delete_all(self) -> int:
+        """Delete every document in the collection. Returns count deleted."""
+        result = self._col.delete_many({})
+        return result.deleted_count
+
     def find_all(self) -> list[dict]:
         """Return all leads ordered by company, then contact level."""
         return list(

@@ -29,6 +29,10 @@ class LeadService:
 
     # ── Read ──────────────────────────────────────────────────────────────────
 
+    def clear_all(self) -> dict:
+        deleted = self._repo.delete_all()
+        return {"deleted": deleted}
+
     def get_all(self) -> list[dict]:
         return [LeadRepository.serialize(d) for d in self._repo.find_all()]
 
