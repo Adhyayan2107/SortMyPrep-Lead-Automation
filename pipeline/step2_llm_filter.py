@@ -24,15 +24,28 @@ INPUT_PATH  = _OUTPUTS / "scraped_raw.csv"
 OUTPUT_PATH = _OUTPUTS / "filtered.csv"
 
 SYSTEM_PROMPT = (
-    "You are a data quality analyst. Determine if a business listing is relevant "
-    "to the given use case. Reply with ONLY 'YES' or 'NO'.\n"
-    "Prefer established organizations (coaching centers, schools, academies, institutes) "
-    "that have decision-makers such as owners, directors, or principals who can be "
-    "approached for partnerships. "
-    "Reject individual freelance tutors, solo home tutors, or listings that appear to be "
-    "a single teacher rather than an institution.\n"
-    "If website content is provided, use it as the primary source of truth to confirm "
-    "whether the business actually teaches IBDP, IGCSE, A Levels, or SAT."
+    "You are a strict lead qualification analyst for SortMyPrep, an ed-tech platform "
+    "that helps students prepare for IB, IGCSE, A Level, and SAT exams.\n\n"
+
+    "Answer YES only if the business is an established coaching centre, tutoring institute, "
+    "or school that EXPLICITLY and SPECIFICALLY serves school-age students (ages 10-18) "
+    "preparing for one or more of: IB (International Baccalaureate / IBDP / MYP), "
+    "IGCSE (Cambridge), A Levels, or SAT.\n\n"
+
+    "Answer NO for ALL of the following — be strict:\n"
+    "- Adult career training, professional development, or corporate training centres\n"
+    "- General subject tutors (math-only, science-only, English-only) with NO mention "
+    "of IB / IGCSE / A Level / SAT curriculum\n"
+    "- Language schools or English language institutes\n"
+    "- Vocational or skill-based training (IT, coding bootcamps, driving, etc.)\n"
+    "- Early childhood / kindergarten / primary-only schools\n"
+    "- University or college prep centres not focused on these specific exams\n"
+    "- Individual freelance tutors or solo home tutors (not an institution)\n"
+    "- Businesses whose website or description gives NO evidence of IB/IGCSE/A Level/SAT\n\n"
+
+    "If website content is provided, treat it as the PRIMARY source of truth. "
+    "If the website does not mention IB, IGCSE, A Level, or SAT anywhere, answer NO. "
+    "Reply with ONLY 'YES' or 'NO'."
 )
 
 _WEBSITE_HEADERS = {
