@@ -10,7 +10,11 @@
   },
   "zoom": 13,
   "searches": [
-    "IB IGCSE coaching"
+    "IB coaching",
+    "IGCSE coaching",
+    "A Level coaching",
+    "SAT coaching",
+    "international curriculum school"
   ],
   "total_per_search": 10,
   "groq_api_key": "YOUR_GROQ_API_KEY",
