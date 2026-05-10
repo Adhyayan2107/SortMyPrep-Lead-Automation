@@ -163,6 +163,7 @@ def main():
     parser.add_argument("--zone",       type=str,            help="Zone to run (e.g. dubai, sharjah)")
     parser.add_argument("--reset",      action="store_true", help="Clear state before running")
     parser.add_argument("--max-grids",  type=int, default=None, help="Limit scraping to N grid points this run")
+    parser.add_argument("--only-step",  type=int, default=None, choices=[1, 2, 3, 4], help="Run only up to this step (e.g. --only-step 2 stops after LLM filter)")
     args = parser.parse_args()
 
     config = load_config()
@@ -224,11 +225,15 @@ def main():
         logging.info("[SKIP] STEP 1: all grid points already scraped for this zone.")
 
     # ── Steps 2–4: resume from last completed step ────────────────────────────
-    for key, label, fn in [
-        ("step2_done", "STEP 2: LLM Filtering (Groq)",        step2_llm_filter.run),
-        ("step3_done", "STEP 3: Contact Lookup (RocketReach)", step3_rocketreach.run),
-        ("step4_done", "STEP 4: Final Export",                 step4_export.run),
+    only_step = args.only_step
+    for step_num, key, label, fn in [
+        (2, "step2_done", "STEP 2: LLM Filtering (Groq)",        step2_llm_filter.run),
+        (3, "step3_done", "STEP 3: Contact Lookup (RocketReach)", step3_rocketreach.run),
+        (4, "step4_done", "STEP 4: Final Export",                 step4_export.run),
     ]:
+        if only_step and step_num > only_step:
+            logging.info(f"[STOP] {label} — skipped (--only-step {only_step})")
+            continue
         if zone_state.get(key):
             logging.info(f"[SKIP] {label} already done.")
             continue

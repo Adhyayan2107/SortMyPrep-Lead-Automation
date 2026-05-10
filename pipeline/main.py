@@ -292,15 +292,6 @@ def scrape_places(search_for: str, total: int,
 def save_places_to_csv(places: List[Place], output_path: str = "result.csv", append: bool = False):
     df = pd.DataFrame([asdict(place) for place in places])
     if not df.empty:
-        # Only drop columns that are all identical AND contain a useless default value.
-        # Skip this entirely when there's only 1 row (every column would be "unique == 1").
-        if len(df) > 1:
-            default_values = {"", "No", "None Found"}
-            for column in list(df.columns):
-                if df[column].nunique() == 1:
-                    val = df[column].iloc[0]
-                    if pd.isna(val) or str(val).strip() in default_values:
-                        df.drop(column, axis=1, inplace=True)
         file_exists = os.path.isfile(output_path)
         mode = "a" if append else "w"
         header = not (append and file_exists)
