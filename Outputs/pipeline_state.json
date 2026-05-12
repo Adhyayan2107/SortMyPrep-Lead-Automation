@@ -4,6 +4,26 @@
       "step2_done": true,
       "step3_done": true,
       "step4_done": true
+    },
+    "sharjah": {
+      "step2_done": true,
+      "step3_done": true,
+      "step4_done": true
+    },
+    "doha": {
+      "step2_done": true,
+      "step3_done": true,
+      "step4_done": true
+    },
+    "uaq": {
+      "step2_done": true,
+      "step3_done": true,
+      "step4_done": true
+    },
+    "hong_kong": {
+      "step2_done": true,
+      "step3_done": true,
+      "step4_done": false
     }
   }
 }
