@@ -145,6 +145,7 @@ def _build_zone_config(config, zone_name):
     step_km     = zone_bounds.get("step_km", config.get("step_km", 10))
     return {
         **config,
+        "zone_name":     zone_name,
         "zone_location": location,
         "zone_country":  country,
         "grid": {

@@ -62,7 +62,13 @@ def _col_width(series, header):
 def run(config):
     df = pd.read_csv(INPUT_PATH)
 
-    # Drop placeholder rows
+    # Filter to only the current zone's rows (step 3 stamps zone_name on every row)
+    zone = config.get("zone_name", "")
+    if zone and "zone_name" in df.columns:
+        df = df[df["zone_name"].astype(str).str.strip() == zone].copy()
+        logging.info(f"Filtered to zone '{zone}': {len(df)} rows")
+
+    # Drop placeholder rows (companies with no contacts found)
     df = df[df["contact_name"].notna() & (df["contact_name"].astype(str).str.strip() != "")].copy()
 
     # Sort using original level values before display transform

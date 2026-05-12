@@ -74,7 +74,10 @@ class LeadService:
         doc = self._repo.find_by_id(lead_id)
         if not doc:
             return {"error": "Lead not found"}
-        script = self._email_svc.generate(dict(doc), email_number)
+        try:
+            script = self._email_svc.generate(dict(doc), email_number)
+        except Exception as e:
+            return {"error": f"Email generation failed: {e}"}
         self._repo.update(lead_id, {"email_script": script, "generate_script": "Yes"})
         return {"script": script}
 

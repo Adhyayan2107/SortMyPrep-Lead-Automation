@@ -44,7 +44,7 @@ SKIP_KEYWORDS   = {
 CONTACT_COLUMNS = [
     "contact_name", "contact_title", "contact_level", "email", "linkedin",
     "company", "company_website", "company_address", "company_phone",
-    "company_reviews_avg", "company_reviews_count",
+    "company_reviews_avg", "company_reviews_count", "zone_name",
 ]
 
 
@@ -206,6 +206,7 @@ def fetch_contacts(api_key, company_name, domain, max_per_level):
 def run(config):
     api_key       = config["rocketreach_api_key"]
     max_per_level = config.get("rocketreach_max_contacts_per_level", 2)
+    zone          = config.get("zone_name", "")
 
     df = pd.read_csv(INPUT_PATH)
     logging.info(f"Loaded {len(df)} companies from '{INPUT_PATH}'")
@@ -248,6 +249,7 @@ def run(config):
                 "company_phone":         company_row.get("phone_number", ""),
                 "company_reviews_avg":   company_row.get("reviews_average", ""),
                 "company_reviews_count": company_row.get("reviews_count", ""),
+                "zone_name":             zone,
             })
 
         done_companies.add(company_name.lower())

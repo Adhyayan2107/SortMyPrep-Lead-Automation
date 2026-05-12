@@ -5,17 +5,22 @@
 //   1. Save the script (Ctrl+S)
 //   2. Function dropdown → select "setup" → Run ▶ → Allow permissions
 //   3. Function dropdown → select "authorizeAll" → Run ▶ → Allow ALL permissions
-//   4. Open your Google Sheet → SortMyPrep menu → Sync Leads
+//   4. Open your Google Sheet → SortMyPrep menu → Sync New Leads
+//
+// UPGRADING FROM OLD VERSION:
+//   Run "Full Resync (replace all)" once to pull the Zone column into existing rows.
+//   After that, use "Sync New Leads" for every subsequent pipeline run.
 // ─────────────────────────────────────────────────────────────────────────────
 
 const BACKEND_URL  = "https://sortmyprep-lead-automation.onrender.com";
 const SENDER_NAME  = "Ananya | sortmyprep";
 
-// Sheet column headers — order must match syncLeads() row builder
+// Sheet column headers — order must match _buildRows()
 const HEADERS = [
   "Lead ID", "Contact Name", "Title", "Level", "Email", "LinkedIn",
-  "Company", "Website", "Address", "Country", "Phone", "Avg Rating", "Review Count",
-  "Generated At", "Generate Script", "Send Email", "Email Script", "Sent At",
+  "Company", "Website", "Address", "Country", "Zone", "Phone",
+  "Avg Rating", "Review Count", "Generated At",
+  "Generate Script", "Send Email", "Email Script", "Sent At",
 ];
 
 // 1-based column index lookup: COL["Email"] === 5
@@ -23,7 +28,6 @@ const COL = {};
 HEADERS.forEach((h, i) => { COL[h] = i + 1; });
 
 // Maps sheet header → MongoDB field name for the batch-sync endpoint.
-// Headers NOT in this map (Lead ID) are never synced back.
 const FIELD_MAP = {
   "Contact Name":    "contact_name",
   "Title":           "contact_title",
@@ -40,24 +44,22 @@ const FIELD_MAP = {
   "Send Email":      "send_email",
   "Email Script":    "email_script",
   "Sent At":         "sent_at",
+  // "Zone" and "Country" are pipeline-stamped — not editable from the sheet
 };
 
 
 // ── One-time setup ────────────────────────────────────────────────────────────
 
 function setup() {
-  // Remove any existing onEditHandler / flushEdits triggers to avoid duplicates
   ScriptApp.getProjectTriggers()
     .filter(t => ["onEditHandler", "flushEdits"].includes(t.getHandlerFunction()))
     .forEach(t => ScriptApp.deleteTrigger(t));
 
-  // Installable onEdit — needed for UrlFetchApp + Gmail access
   ScriptApp.newTrigger("onEditHandler")
     .forSpreadsheet(SpreadsheetApp.getActive())
     .onEdit()
     .create();
 
-  // Time-based trigger: flush queued cell edits to backend every minute
   ScriptApp.newTrigger("flushEdits")
     .timeBased()
     .everyMinutes(1)
@@ -70,8 +72,6 @@ function setup() {
 
 
 function authorizeAll() {
-  // Touches UrlFetchApp so Apps Script requests external_request scope.
-  // gmail.send is declared in appsscript.json — sendEmail() will work automatically.
   UrlFetchApp.fetch("https://www.google.com");
   SpreadsheetApp.getUi().alert(
     "✅ All permissions granted!\n\nGenerate Script and Send Email will now work."
@@ -84,8 +84,9 @@ function authorizeAll() {
 function onOpen() {
   SpreadsheetApp.getUi()
     .createMenu("SortMyPrep")
-    .addItem("Sync Leads from Pipeline", "syncLeads")
-    .addItem("Flush Pending Edits Now",  "flushEdits")
+    .addItem("Sync New Leads",            "syncLeads")
+    .addItem("Full Resync (replace all)", "fullResync")
+    .addItem("Flush Pending Edits Now",   "flushEdits")
     .addSeparator()
     .addItem("About", "showAbout")
     .addToUi();
@@ -94,19 +95,78 @@ function onOpen() {
 function showAbout() {
   SpreadsheetApp.getUi().alert(
     "sortmyprep Lead Manager\n\n" +
-    "• Sync Leads      — pull all leads from the backend\n" +
-    "• Generate Script — set column to Yes to generate a personalised email\n" +
-    "• Send Email      — set column to Yes to send via Gmail\n" +
-    "• Cell edits auto-sync to backend within 1 minute"
+    "• Sync New Leads    — append only leads not already in the sheet\n" +
+    "• Full Resync       — replace all rows with fresh data from backend\n" +
+    "• Generate Script   — set column to Yes to generate a personalised email\n" +
+    "• Send Email        — set column to Yes to send via Gmail\n" +
+    "• Cell edits auto-sync to backend within 1 minute\n\n" +
+    "Tip: Use the Zone column filter to work on one pipeline run at a time."
   );
 }
 
 
-// ── Sync leads from backend → sheet ──────────────────────────────────────────
+// ── Sync leads: APPEND-ONLY (Fix B) ──────────────────────────────────────────
+// Only adds leads whose IDs are not already in the sheet.
+// Existing rows — including email scripts and sent status — are untouched.
 
 function syncLeads() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
   const ui    = SpreadsheetApp.getUi();
+
+  let data;
+  try {
+    const resp = UrlFetchApp.fetch(BACKEND_URL + "/api/leads");
+    data = JSON.parse(resp.getContentText());
+  } catch (e) {
+    ui.alert("Failed to reach backend: " + e.message);
+    return;
+  }
+
+  // Ensure header row exists
+  if (sheet.getLastRow() < 1) {
+    sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+    styleHeader(sheet);
+  }
+
+  // Collect Lead IDs already in the sheet
+  const existingIds = new Set();
+  const lastRow = sheet.getLastRow();
+  if (lastRow > 1) {
+    sheet.getRange(2, COL["Lead ID"], lastRow - 1, 1)
+         .getValues()
+         .forEach(function(r) { if (r[0]) existingIds.add(String(r[0])); });
+  }
+
+  const newLeads = data.filter(function(lead) {
+    return !existingIds.has(String(lead.id));
+  });
+
+  if (!newLeads.length) {
+    ui.alert("No new leads to sync.\n(Use Full Resync to replace all rows with fresh backend data.)");
+    return;
+  }
+
+  const rows     = _buildRows(newLeads);
+  const appendAt = sheet.getLastRow() + 1;
+  sheet.getRange(appendAt, 1, rows.length, HEADERS.length).setValues(rows);
+  styleDataRows(sheet, rows.length, appendAt);
+  ui.alert("Added " + rows.length + " new lead(s).");
+}
+
+
+// ── Full Resync: wipe + rewrite (for recovery / schema changes) ───────────────
+
+function fullResync() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getActiveSheet();
+  const ui    = SpreadsheetApp.getUi();
+
+  const confirm = ui.alert(
+    "Full Resync",
+    "This will REPLACE ALL rows in the sheet with fresh data from the backend.\n\n" +
+    "Any local edits not yet flushed to the backend will be lost.\n\nContinue?",
+    ui.ButtonSet.YES_NO
+  );
+  if (confirm !== ui.Button.YES) return;
 
   let data;
   try {
@@ -126,38 +186,44 @@ function syncLeads() {
     return;
   }
 
-  const LEVEL_DISPLAY = { "level1": "Senior (L1)", "level2": "Mid (L2)" };
-
-  const rows = data.map(lead => [
-    lead.id,
-    lead.contact_name          || "",
-    lead.contact_title         || "",
-    LEVEL_DISPLAY[lead.contact_level] || lead.contact_level || "",
-    lead.email                 || "",
-    lead.linkedin              || "",
-    lead.company               || "",
-    lead.company_website       || "",
-    lead.company_address       || "",
-    lead.country               || "",
-    lead.company_phone         || "",
-    lead.company_reviews_avg   || "",
-    lead.company_reviews_count || "",
-    lead.generated_at          || "",
-    lead.generate_script       || "No",
-    lead.send_email            || "No",
-    lead.email_script          || "",
-    lead.sent_at               || "",
-  ]);
-
+  const rows = _buildRows(data);
   sheet.getRange(2, 1, rows.length, HEADERS.length).setValues(rows);
-  styleDataRows(sheet, rows.length);
+  styleDataRows(sheet, rows.length, 2);
   ui.alert("Synced " + rows.length + " leads.");
 }
 
 
+// ── Row builder (shared by both sync functions) ───────────────────────────────
+
+function _buildRows(data) {
+  const LEVEL_DISPLAY = { "level1": "Senior (L1)", "level2": "Mid (L2)" };
+  return data.map(function(lead) {
+    return [
+      lead.id,
+      lead.contact_name          || "",
+      lead.contact_title         || "",
+      LEVEL_DISPLAY[lead.contact_level] || lead.contact_level || "",
+      lead.email                 || "",
+      lead.linkedin              || "",
+      lead.company               || "",
+      lead.company_website       || "",
+      lead.company_address       || "",
+      lead.country               || "",
+      lead.zone_name             || "",   // Fix C — pipeline-stamped zone
+      lead.company_phone         || "",
+      lead.company_reviews_avg   || "",
+      lead.company_reviews_count || "",
+      lead.generated_at          || "",
+      lead.generate_script       || "No",
+      lead.send_email            || "No",
+      lead.email_script          || "",
+      lead.sent_at               || "",
+    ];
+  });
+}
+
+
 // ── onEdit handler (installable trigger) ─────────────────────────────────────
-// Named onEditHandler (not onEdit) so the automatic simple trigger
-// — which lacks UrlFetchApp permission — never runs this code.
 
 function onEditHandler(e) {
   const sheet = e.source.getActiveSheet();
@@ -165,24 +231,27 @@ function onEditHandler(e) {
   const col   = e.range.getColumn();
   const value = (e.value || "").toString().trim();
 
-  if (row === 1) return; // header row — ignore
+  if (row === 1) return;
 
-  const header  = HEADERS[col - 1];
-  const leadId  = sheet.getRange(row, COL["Lead ID"]).getValue();
+  const header = HEADERS[col - 1];
+  const leadId = sheet.getRange(row, COL["Lead ID"]).getValue();
 
   if (!leadId || !header) return;
 
-  // Control columns — handle immediately
+  // Fix A — guard: only trigger if the action hasn't already been completed
   if (header === "Generate Script" && value.toLowerCase() === "yes") {
+    const existingScript = sheet.getRange(row, COL["Email Script"]).getValue();
+    if (existingScript && existingScript.toString().trim() !== "") return;
     handleGenerateScript(sheet, row, leadId);
     return;
   }
   if (header === "Send Email" && value.toLowerCase() === "yes") {
+    const sentAt = sheet.getRange(row, COL["Sent At"]).getValue();
+    if (sentAt && sentAt.toString().trim() !== "") return;
     handleSendEmail(sheet, row, leadId);
     return;
   }
 
-  // All other columns — queue for batch sync
   const field = FIELD_MAP[header];
   if (field) {
     queueEdit(String(leadId), field, value);
@@ -196,8 +265,7 @@ function queueEdit(leadId, field, value) {
   const props = PropertiesService.getScriptProperties();
   const queue = JSON.parse(props.getProperty("editQueue") || "[]");
 
-  // Last-write-wins: replace any existing entry for same lead+field
-  const idx = queue.findIndex(q => q.id === leadId && q.field === field);
+  const idx   = queue.findIndex(function(q) { return q.id === leadId && q.field === field; });
   const entry = { id: leadId, field: field, value: value };
   if (idx >= 0) queue[idx] = entry;
   else queue.push(entry);
@@ -213,7 +281,6 @@ function flushEdits() {
   const queue = JSON.parse(raw);
   if (!queue.length) return;
 
-  // Clear queue immediately — if the fetch fails we don't want infinite retries
   props.deleteProperty("editQueue");
 
   try {
@@ -224,7 +291,6 @@ function flushEdits() {
       muteHttpExceptions: true,
     });
   } catch (e) {
-    // Non-fatal — changes are in the sheet; user can Flush manually
     console.error("flushEdits failed: " + e.message);
   }
 }
@@ -280,10 +346,10 @@ function handleSendEmail(sheet, row, leadId) {
   }
 
   const lines    = script.split("\n");
-  const subjLine = lines.find(l => l.toLowerCase().startsWith("subject:")) || "";
+  const subjLine = lines.find(function(l) { return l.toLowerCase().startsWith("subject:"); }) || "";
   const subject  = subjLine.replace(/^subject:\s*/i, "").trim()
                    || "Partnership Opportunity | sortmyprep";
-  const body     = lines.filter(l => !l.toLowerCase().startsWith("subject:"))
+  const body     = lines.filter(function(l) { return !l.toLowerCase().startsWith("subject:"); })
                         .join("\n").trim();
 
   cell.setValue("Sending...");
@@ -300,7 +366,6 @@ function handleSendEmail(sheet, row, leadId) {
     return;
   }
 
-  // Mark sent in backend (non-critical — don't block on failure)
   try {
     UrlFetchApp.fetch(BACKEND_URL + "/api/leads/" + leadId + "/send", {
       method: "post", contentType: "application/json", muteHttpExceptions: true,
@@ -316,26 +381,21 @@ function handleSendEmail(sheet, row, leadId) {
 
 
 // ── Plain-text → HTML email converter ────────────────────────────────────────
-// Called at send time so the sheet still stores readable plain text.
 
 function _esc(s) {
   return s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
 
 function _fmt(s) {
-  // Split on URLs first so we don't escape them, then escape the rest
   const parts = s.split(/(https?:\/\/[^\s]+)/g);
   let out = "";
   parts.forEach(function(part, i) {
     if (i % 2 === 1) {
-      // URL — render as styled link, strip trailing punctuation
       const url = part.replace(/[.,;!?)]+$/, "");
       out += '<a href="' + url + '" style="color:#1155CC;font-weight:600;text-decoration:none;">View Demo →</a>';
     } else {
       let t = _esc(part);
-      // Bold greeting name: "Hi Yassine," at start of text
       t = t.replace(/^(Hi\s+)(\w+)([,!.]?\s)/, "$1<strong>$2</strong>$3");
-      // Bold key brand/stat phrases
       t = t.replace(/\bsortmyprep\b/gi, "<strong>sortmyprep</strong>");
       t = t.replace(/\b2,000\+/g, "<strong>2,000+</strong>");
       t = t.replace(/\b1,000\b/g, "<strong>1,000</strong>");
@@ -357,7 +417,6 @@ function plainToHtml(plain) {
     const items  = lines.filter(isItem);
 
     if (items.length >= 2) {
-      // Numbered list block
       const header = lines.filter(function(l){ return !isItem(l); }).join(" ");
       if (header) {
         body += '<p style="margin:12px 0 2px 0;"><strong>' + _esc(header) + "</strong></p>";
@@ -368,7 +427,6 @@ function plainToHtml(plain) {
       });
       body += "</ol>";
     } else {
-      // Regular paragraph — join lines to fix mid-sentence wrapping
       body += '<p style="margin:10px 0;">' + _fmt(lines.join(" ")) + "</p>";
     }
   });
@@ -396,7 +454,6 @@ function styleHeader(sheet) {
   sheet.setRowHeight(1, 28);
   sheet.setFrozenRows(1);
 
-  // Explicit widths for every column
   const widths = {
     "Lead ID":         160,
     "Contact Name":    160,
@@ -408,6 +465,7 @@ function styleHeader(sheet) {
     "Website":         150,
     "Address":         240,
     "Country":          80,
+    "Zone":            100,
     "Phone":           130,
     "Avg Rating":       90,
     "Review Count":    110,
@@ -417,7 +475,7 @@ function styleHeader(sheet) {
     "Email Script":    420,
     "Sent At":         160,
   };
-  Object.entries(widths).forEach(([h, w]) => {
+  Object.entries(widths).forEach(function([h, w]) {
     if (COL[h]) sheet.setColumnWidth(COL[h], w);
   });
 
@@ -427,26 +485,25 @@ function styleHeader(sheet) {
   sheet.getRange(2, COL["Send Email"],      500, 1).setDataValidation(yesNo);
 }
 
-function styleDataRows(sheet, count) {
+// startRow defaults to 2 — pass appendAt when styling newly appended rows only
+function styleDataRows(sheet, count, startRow) {
+  startRow = startRow || 2;
   if (count < 1) return;
 
-  // Fetch all level values in one API call
-  const levels = sheet.getRange(2, COL["Level"], count, 1).getValues();
+  const levels = sheet.getRange(startRow, COL["Level"], count, 1).getValues();
 
-  // Apply borders + font to entire data block at once
-  sheet.getRange(2, 1, count, HEADERS.length)
+  sheet.getRange(startRow, 1, count, HEADERS.length)
        .setFontFamily("Arial")
        .setFontSize(10)
        .setVerticalAlignment("middle")
        .setBorder(true, true, true, true, true, true,
                   "#DDDDDD", SpreadsheetApp.BorderStyle.SOLID);
 
-  // Set background row-by-row based on level
   for (let i = 0; i < count; i++) {
     const level = levels[i][0];
     const bg    = level === "Senior (L1)" ? "#D6E4F0" : "#FFFFFF";
-    sheet.getRange(i + 2, 1, 1, HEADERS.length).setBackground(bg);
-    sheet.setRowHeight(i + 2, 22);
+    sheet.getRange(startRow + i, 1, 1, HEADERS.length).setBackground(bg);
+    sheet.setRowHeight(startRow + i, 22);
   }
 }
 

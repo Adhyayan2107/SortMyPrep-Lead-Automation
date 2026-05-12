@@ -293,6 +293,13 @@ def save_places_to_csv(places: List[Place], output_path: str = "result.csv", app
     df = pd.DataFrame([asdict(place) for place in places])
     if not df.empty:
         file_exists = os.path.isfile(output_path)
+        if append and file_exists:
+            # Match existing file's column order so appended rows never mismatch
+            existing_cols = pd.read_csv(output_path, nrows=0).columns.tolist()
+            for col in existing_cols:
+                if col not in df.columns:
+                    df[col] = ""
+            df = df[existing_cols]
         mode = "a" if append else "w"
         header = not (append and file_exists)
         df.to_csv(output_path, index=False, mode=mode, header=header)

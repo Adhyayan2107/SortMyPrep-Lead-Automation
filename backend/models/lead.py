@@ -15,6 +15,7 @@ class Lead:
     company_website:       str  = ""
     company_address:       str  = ""
     country:               str  = ""
+    zone_name:             str  = ""
     company_phone:         str  = ""
     company_reviews_avg:   str  = ""
     company_reviews_count: str  = ""
@@ -48,6 +49,7 @@ class Lead:
             "company_website":       self.company_website,
             "company_address":       self.company_address,
             "country":               self.country,
+            "zone_name":             self.zone_name,
             "company_phone":         self.company_phone,
             "company_reviews_avg":   self.company_reviews_avg,
             "company_reviews_count": self.company_reviews_count,
