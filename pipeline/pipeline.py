@@ -156,6 +156,57 @@ def _build_zone_config(config, zone_name):
     }
 
 
+# ── Promote (manual-review bypass for step 2) ────────────────────────────────
+
+def _promote_zone(zone_name: str, zone_config: dict, state: dict) -> bool:
+    """
+    Semi-automated alternative to the LLM filter.
+    After the user reviews and cleans scraped_raw.csv manually (with Claude's
+    help), this copies the zone's entries into filtered.csv and marks step2_done.
+
+    Filters scraped_raw.csv to rows whose address contains the zone's location
+    string (e.g. 'Hong Kong', 'Qatar', 'Dubai') then appends them to
+    filtered.csv, skipping any names already present.
+    """
+    import pandas as pd
+
+    raw_path      = _OUTPUTS / "scraped_raw.csv"
+    filtered_path = _OUTPUTS / "filtered.csv"
+    location      = zone_config.get("zone_location", zone_name)
+
+    if not raw_path.exists():
+        logging.error("scraped_raw.csv not found — run step 1 first.")
+        return False
+
+    df       = pd.read_csv(raw_path)
+    zone_df  = df[df["address"].astype(str).str.contains(location, case=False, na=False)].copy()
+    logging.info(f"Promote: {len(zone_df)} entries found for '{location}' in scraped_raw.csv")
+
+    if zone_df.empty:
+        logging.warning(f"No entries matched location '{location}' — nothing promoted.")
+        return False
+
+    if filtered_path.exists():
+        existing       = pd.read_csv(filtered_path)
+        existing_names = set(existing["name"].astype(str).str.lower().str.strip())
+        new_rows       = zone_df[~zone_df["name"].astype(str).str.lower().str.strip().isin(existing_names)]
+        skipped        = len(zone_df) - len(new_rows)
+        if skipped:
+            logging.info(f"Promote: skipped {skipped} names already in filtered.csv")
+        result = pd.concat([existing, new_rows], ignore_index=True)
+    else:
+        new_rows = zone_df
+        result   = zone_df.copy()
+
+    result.to_csv(filtered_path, index=False)
+    logging.info(f"Promote complete — {len(new_rows)} rows added → filtered.csv ({len(result)} total)")
+
+    state.setdefault("zones", {}).setdefault(zone_name, {})["step2_done"] = True
+    save_state(state)
+    logging.info(f"step2_done marked for '{zone_name}'. Running steps 3 + 4...")
+    return True
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main():
@@ -165,6 +216,10 @@ def main():
     parser.add_argument("--reset",      action="store_true", help="Clear state before running")
     parser.add_argument("--max-grids",  type=int, default=None, help="Limit scraping to N grid points this run")
     parser.add_argument("--only-step",  type=int, default=None, choices=[1, 2, 3, 4], help="Run only up to this step (e.g. --only-step 2 stops after LLM filter)")
+    parser.add_argument("--promote",    action="store_true",
+                        help="Copy this zone's entries from scraped_raw.csv into filtered.csv and "
+                             "mark step 2 done. Use after manually reviewing/cleaning scraped_raw.csv "
+                             "with Claude instead of running the LLM filter.")
     args = parser.parse_args()
 
     config = load_config()
@@ -203,6 +258,8 @@ def main():
     import step2_llm_filter
     import step3_rocketreach
     import step4_export
+    import normalize_names
+    import remove_duplicates
 
     zone_state = state.setdefault("zones", {}).setdefault(zone_name, {})
 
@@ -217,6 +274,18 @@ def main():
         logging.info(f"STEP 1: Scraping Google Maps ({done}/{total if total else '?'} done){suffix}")
         step1_matrix.run(zone_config, zone_name, max_grids=max_grids)
 
+        # Auto-clean scraped_raw.csv immediately after every scrape batch
+        raw_path = str(_OUTPUTS / "scraped_raw.csv")
+        if os.path.exists(raw_path):
+            logging.info("\nAuto-cleaning scraped_raw.csv after scrape...")
+            normalize_names.normalize_csv(raw_path, raw_path)
+            remove_duplicates.remove_duplicates(raw_path, raw_path)
+            logging.info(
+                "Done. Review scraped_raw.csv, then run:\n"
+                f"  python pipeline.py --zone {zone_name} --promote\n"
+                "to push cleaned data into filtered.csv and continue with RocketReach."
+            )
+
         # New data scraped — downstream steps need to re-run
         zone_state.pop("step2_done", None)
         zone_state.pop("step3_done", None)
@@ -224,6 +293,12 @@ def main():
         save_state(state)
     else:
         logging.info("[SKIP] STEP 1: all grid points already scraped for this zone.")
+
+    # ── --promote: manual-review bypass for step 2 ───────────────────────────
+    if args.promote and not zone_state.get("step2_done"):
+        if not _promote_zone(zone_name, zone_config, state):
+            return
+        zone_state = state["zones"][zone_name]  # refresh after promote
 
     # ── Steps 2–4: resume from last completed step ────────────────────────────
     only_step = args.only_step
